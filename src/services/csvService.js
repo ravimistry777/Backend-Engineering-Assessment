@@ -7,6 +7,7 @@ const insertOrders = require("./orderService");
 const BATCH_SIZE = 500;
 
 async function parseCSV(filePath) {
+
     return new Promise((resolve, reject) => {
 
         let batch = [];
@@ -14,15 +15,11 @@ async function parseCSV(filePath) {
         let insertedOrders = 0;
         let invalidOrders = [];
 
-        const stream = fs.createReadStream(filePath);
-
         const parser = parse({ headers: true });
 
         parser.on("error", reject);
 
-        parser.on("data", async (row) => {
-
-            parser.pause();
+        parser.on("data", (row) => {
 
             totalOrders++;
 
@@ -35,31 +32,10 @@ async function parseCSV(filePath) {
                     reason: validation.reason
                 });
 
-                parser.resume();
                 return;
             }
 
             batch.push(row);
-
-            if (batch.length >= BATCH_SIZE) {
-
-                try {
-
-                    await insertOrders(batch);
-
-                    insertedOrders += batch.length;
-
-                    batch = [];
-
-                } catch (err) {
-
-                    return reject(err);
-
-                }
-
-            }
-
-            parser.resume();
 
         });
 
@@ -67,11 +43,13 @@ async function parseCSV(filePath) {
 
             try {
 
-                if (batch.length > 0) {
+                for (let i = 0; i < batch.length; i += BATCH_SIZE) {
 
-                    await insertOrders(batch);
+                    const currentBatch = batch.slice(i, i + BATCH_SIZE);
 
-                    insertedOrders += batch.length;
+                    await insertOrders(currentBatch);
+
+                    insertedOrders += currentBatch.length;
 
                 }
 
@@ -89,9 +67,10 @@ async function parseCSV(filePath) {
 
         });
 
-        stream.pipe(parser);
+        fs.createReadStream(filePath).pipe(parser);
 
     });
+
 }
 
 module.exports = parseCSV;
